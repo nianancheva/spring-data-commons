@@ -16,30 +16,22 @@
 package org.springframework.data.util;
 
 import java.lang.reflect.Method;
-import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.springframework.core.GenericTypeResolver;
+import org.springframework.core.ResolvableType;
 import org.springframework.util.Assert;
 import org.springframework.util.ConcurrentReferenceHashMap;
 import org.springframework.util.ConcurrentReferenceHashMap.ReferenceType;
 
 /**
- * {@link TypeInformation} for a plain {@link Class}.
- *
- * @author Oliver Gierke
  * @author Christoph Strobl
+ * @since 2021/11
  */
-@SuppressWarnings({ "unchecked", "rawtypes" })
-public class ClassTypeInformation<S> extends TypeDiscoverer<S> {
+public class ClassTypeInformation<S> extends NewTypeDiscoverer<S> {
 
 	public static final ClassTypeInformation<Collection> COLLECTION = new ClassTypeInformation(Collection.class);
 	public static final ClassTypeInformation<List> LIST = new ClassTypeInformation(List.class);
@@ -50,91 +42,33 @@ public class ClassTypeInformation<S> extends TypeDiscoverer<S> {
 	private static final Map<Class<?>, ClassTypeInformation<?>> cache = new ConcurrentReferenceHashMap<>(64,
 			ReferenceType.WEAK);
 
+	public static TypeInformation<?> fromReturnTypeOf(Method method) {
+		// todo open issue in FW for ResolvableType.forMethod(method)
+		return new NewTypeDiscoverer(ResolvableType.forType(method.getGenericReturnType(), ResolvableType.forClass(method.getDeclaringClass())));
+	}
+
+	Class<?> type;
+
 	static {
 		Arrays.asList(COLLECTION, LIST, SET, MAP, OBJECT).forEach(it -> cache.put(it.getType(), it));
 	}
 
-	private final Class<S> type;
-
-	/**
-	 * Simple factory method to easily create new instances of {@link ClassTypeInformation}.
-	 *
-	 * @param <S>
-	 * @param type must not be {@literal null}.
-	 * @return
-	 */
 	public static <S> ClassTypeInformation<S> from(Class<S> type) {
 
 		Assert.notNull(type, "Type must not be null!");
+		System.out.println("type: " + type);
 
 		return (ClassTypeInformation<S>) cache.computeIfAbsent(type, ClassTypeInformation::new);
 	}
 
-	/**
-	 * Creates a {@link TypeInformation} from the given method's return type.
-	 *
-	 * @param method must not be {@literal null}.
-	 * @return
-	 */
-	public static <S> TypeInformation<S> fromReturnTypeOf(Method method) {
-
-		Assert.notNull(method, "Method must not be null!");
-		return (TypeInformation<S>) ClassTypeInformation.from(method.getDeclaringClass())
-				.createInfo(method.getGenericReturnType());
-	}
-
-	/**
-	 * Creates {@link ClassTypeInformation} for the given type.
-	 *
-	 * @param type
-	 */
 	ClassTypeInformation(Class<S> type) {
-		super(type, getTypeVariableMap(type));
+		super(ResolvableType.forClass(type));
 		this.type = type;
-	}
-
-	/**
-	 * Little helper to allow us to create a generified map, actually just to satisfy the compiler.
-	 *
-	 * @param type must not be {@literal null}.
-	 * @return
-	 */
-	private static Map<TypeVariable<?>, Type> getTypeVariableMap(Class<?> type) {
-		return getTypeVariableMap(type, new HashSet<>());
-	}
-
-	private static Map<TypeVariable<?>, Type> getTypeVariableMap(Class<?> type, Collection<Type> visited) {
-
-		if (visited.contains(type)) {
-			return Collections.emptyMap();
-		} else {
-			visited.add(type);
-		}
-
-		var source = GenericTypeResolver.getTypeVariableMap(type);
-		Map<TypeVariable<?>, Type> map = new HashMap<>(source.size());
-
-		for (var entry : source.entrySet()) {
-
-			var value = entry.getValue();
-			map.put(entry.getKey(), entry.getValue());
-
-			if (value instanceof Class) {
-
-				for (var nestedEntry : getTypeVariableMap((Class<?>) value, visited).entrySet()) {
-					if (!map.containsKey(nestedEntry.getKey())) {
-						map.put(nestedEntry.getKey(), nestedEntry.getValue());
-					}
-				}
-			}
-		}
-
-		return map;
 	}
 
 	@Override
 	public Class<S> getType() {
-		return type;
+		return (Class<S>) type;
 	}
 
 	@Override
@@ -155,5 +89,10 @@ public class ClassTypeInformation<S> extends TypeDiscoverer<S> {
 	@Override
 	public String toString() {
 		return type.getName();
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		return super.equals(o);
 	}
 }
