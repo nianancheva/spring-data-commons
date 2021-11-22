@@ -23,13 +23,16 @@ import java.util.Map;
 import java.util.Set;
 
 import org.springframework.core.ResolvableType;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.ConcurrentReferenceHashMap;
 import org.springframework.util.ConcurrentReferenceHashMap.ReferenceType;
 
 /**
+ * {@link TypeInformation} for a plain {@link Class}.
+ *
+ * @author Oliver Gierke
  * @author Christoph Strobl
- * @since 2021/11
  */
 public class ClassTypeInformation<S> extends TypeDiscoverer<S> {
 
@@ -42,15 +45,29 @@ public class ClassTypeInformation<S> extends TypeDiscoverer<S> {
 	private static final Map<Class<?>, ClassTypeInformation<?>> cache = new ConcurrentReferenceHashMap<>(64,
 			ReferenceType.WEAK);
 
+	/**
+	 * Warning: Does not fully resolve generic arguments.
+	 * @param method
+	 * @return
+	 * @deprecated since 3.0 Use {@link #fromReturnTypeOf(Method, Class)} instead.
+	 */
+	@Deprecated
 	public static TypeInformation<?> fromReturnTypeOf(Method method) {
 		return new TypeDiscoverer<>(ResolvableType.forMethodReturnType(method));
 	}
-//
-//	public static TypeInformation<?> fromReturnTypeOf(Method method, Class<?> actualType) {
-//		// todo open issue in FW for ResolvableType.forMethod(method)
-//		//return new NewTypeDiscoverer(ResolvableType.forType(method.getGenericReturnType(), ResolvableType.forClass(method.getDeclaringClass())));
-//		return new NewTypeDiscoverer<>(ResolvableType.forMethodReturnType(method, actualType));
-//	}
+
+	/**
+	 * @param method
+	 * @param actualType can be {@literal null}.
+	 * @return
+	 */
+	public static TypeInformation<?> fromReturnTypeOf(Method method, @Nullable Class<?> actualType) {
+
+		if(actualType == null) {
+			return new TypeDiscoverer<>(ResolvableType.forMethodReturnType(method));
+		}
+		return new TypeDiscoverer<>(ResolvableType.forMethodReturnType(method, actualType));
+	}
 
 	Class<?> type;
 
