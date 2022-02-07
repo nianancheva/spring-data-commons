@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import org.springframework.core.MethodParameter;
 import org.springframework.core.ResolvableType;
@@ -32,6 +33,7 @@ import org.springframework.data.repository.util.QueryExecutionConverters;
 import org.springframework.data.repository.util.ReactiveWrapperConverters;
 import org.springframework.data.util.ClassTypeInformation;
 import org.springframework.data.util.Lazy;
+import org.springframework.data.util.TypeDiscoverer;
 import org.springframework.util.Assert;
 
 /**
@@ -207,24 +209,17 @@ public class Parameter {
 	 */
 	private static boolean isDynamicProjectionParameter(MethodParameter parameter) {
 
-		var method = parameter.getMethod();
-
-		if (method == null) {
-			throw new IllegalStateException(String.format("Method parameter %s is not backed by a method!", parameter));
-		}
-
-		var ownerType = ClassTypeInformation.from(parameter.getDeclaringClass());
-		var parameterTypes = ownerType.getParameterTypes(method).get(parameter.getParameterIndex());
-
-		if (!parameterTypes.getType().equals(Class.class)) {
+		if (!parameter.getParameterType().equals(Class.class)) {
 			return false;
 		}
 
-		var bound = parameterTypes.getTypeArguments().get(0);
-		var returnType = ClassTypeInformation.fromReturnTypeOf(method);
+		ResolvableType returnType = ResolvableType.forMethodReturnType(parameter.getMethod());
+		if(new TypeDiscoverer(returnType).isCollectionLike() || org.springframework.util.ClassUtils.isAssignable(Stream.class, returnType.toClass())) {
+			returnType = returnType.getGeneric(0);
+		}
 
-		return bound
-				.equals(QueryExecutionConverters.unwrapWrapperTypes(ReactiveWrapperConverters.unwrapWrapperTypes(returnType)));
+		ResolvableType type = ResolvableType.forMethodParameter(parameter);
+		return returnType.getType().equals(type.getGeneric(0).getType());
 	}
 
 	/**

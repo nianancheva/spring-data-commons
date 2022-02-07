@@ -18,6 +18,7 @@ package org.springframework.data.util;
 import static org.assertj.core.api.Assertions.*;
 import static org.springframework.data.util.ClassTypeInformation.from;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.util.Collection;
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.ResolvableType;
+import org.springframework.util.ReflectionUtils;
 
 /**
  * Unit tests for {@link TypeDiscoverer}.
@@ -179,11 +181,152 @@ public class TypeDiscovererUnitTests {
 		assertThat(type.isSubTypeOf(String.class)).isFalse();
 	}
 
+	@Test
+	void isNotEqualIfFieldsDiffer() {
+		// should we have something like a default TypeInformation
+		// wiht static methods for forFieldOfType(), forClass(), like the
+		// ones we have on resolvable type and then cache the stuff there?
+
+		// Managed to get Stackoverflow on hashcode of Resolvable type once for caching
+
+		// tests for fields in same class
+		// tests for inherited fields
+		// tests for same signature in different classes
+
+	}
+
+	@Test
+		// GH-2312
+	void sameFieldNoGenericsInfoShouldBeEqual() {
+
+		Field addresses = ReflectionUtils.findField(Person.class, "addresses");
+
+		TypeDiscoverer<Object> discoverer1 = new TypeDiscoverer<>(ResolvableType.forField(addresses, Person.class));
+		TypeDiscoverer<Object> discoverer2 = new TypeDiscoverer<>(ResolvableType.forField(addresses, Person.class));
+
+		assertThat(discoverer1).isEqualTo(discoverer2);
+		assertThat(discoverer1.hashCode()).isEqualTo(discoverer2.hashCode());
+	}
+
+	@Test
+		// GH-2312
+	void sameFieldNoGenericsWhenInherited() {
+
+		Field addresses = ReflectionUtils.findField(Person.class, "addresses");
+		TypeDiscoverer<Object> discoverer1 = new TypeDiscoverer<>(ResolvableType.forField(addresses, Person.class));
+		TypeDiscoverer<Object> discoverer2 = new TypeDiscoverer<>(ResolvableType.forField(addresses, TypeExtendingPerson.class));
+
+		assertThat(discoverer1).isEqualTo(discoverer2);
+		assertThat(discoverer1.hashCode()).isEqualTo(discoverer2.hashCode());
+	}
+
+	@Test
+		// GH-2312
+	void sameFieldNoGenericsOnDifferentTypes() {
+
+		Field addresses1 = ReflectionUtils.findField(Person.class, "addresses");
+		TypeDiscoverer<Object> discoverer1 = new TypeDiscoverer<>(ResolvableType.forField(addresses1, Person.class));
+
+		Field addresses2 = ReflectionUtils.findField(OtherPerson.class, "addresses");
+		TypeDiscoverer<Object> discoverer2 = new TypeDiscoverer<>(ResolvableType.forField(addresses2, OtherPerson.class));
+
+		assertThat(discoverer1).isEqualTo(discoverer2);
+		assertThat(discoverer1.hashCode()).isEqualTo(discoverer2.hashCode());
+	}
+
+	@Test
+		// GH-2312
+	void sameFieldWithGenerics() {
+
+		Field field1 = ReflectionUtils.findField(GenericPerson.class, "value");
+		TypeDiscoverer<Object> discoverer1 = new TypeDiscoverer<>(ResolvableType.forField(field1, GenericPerson.class));
+
+		Field field2 = ReflectionUtils.findField(GenericPerson.class, "value");
+		TypeDiscoverer<Object> discoverer2 = new TypeDiscoverer<>(ResolvableType.forField(field2, GenericPerson.class));
+
+		assertThat(discoverer1).isEqualTo(discoverer2);
+		assertThat(discoverer1.hashCode()).isEqualTo(discoverer2.hashCode());
+	}
+
+	@Test
+		// GH-2312
+	void sameFieldWithGenericsSet() {
+
+		Field field1 = ReflectionUtils.findField(GenericPerson.class, "value");
+		TypeDiscoverer<Object> discoverer1 = new TypeDiscoverer<>(ResolvableType.forField(field1, TypeExtendingGenericPersonWithObject.class));
+
+		Field field2 = ReflectionUtils.findField(GenericPerson.class, "value");
+		TypeDiscoverer<Object> discoverer2 = new TypeDiscoverer<>(ResolvableType.forField(field2, TypeExtendingGenericPersonWithObject.class));
+
+		assertThat(discoverer1).isEqualTo(discoverer2);
+		assertThat(discoverer1.hashCode()).isEqualTo(discoverer2.hashCode());
+	}
+
+	@Test
+		// GH-2312
+	void sameFieldWithDifferentGenericsSet() {
+
+		Field field1 = ReflectionUtils.findField(GenericPerson.class, "value");
+		TypeDiscoverer<Object> discoverer1 = new TypeDiscoverer<>(ResolvableType.forField(field1, TypeExtendingGenericPersonWithObject.class));
+
+		Field field2 = ReflectionUtils.findField(GenericPerson.class, "value");
+		TypeDiscoverer<Object> discoverer2 = new TypeDiscoverer<>(ResolvableType.forField(field2, TypeExtendingGenericPersonWithAddress.class));
+
+		assertThat(discoverer1).isNotEqualTo(discoverer2);
+		assertThat(discoverer1.hashCode()).isNotEqualTo(discoverer2.hashCode());
+	}
+
+	@Test
+		// GH-2312
+	void sameFieldWithDifferentNoGenericsAndObjectOneSet() {
+
+		Field field1 = ReflectionUtils.findField(GenericPerson.class, "value");
+		TypeDiscoverer<Object> discoverer1 = new TypeDiscoverer<>(ResolvableType.forField(field1, GenericPerson.class));
+
+		Field field2 = ReflectionUtils.findField(GenericPerson.class, "value");
+		TypeDiscoverer<Object> discoverer2 = new TypeDiscoverer<>(ResolvableType.forField(field2, TypeExtendingGenericPersonWithObject.class));
+
+		assertThat(discoverer1).isEqualTo(discoverer2); // TODO: notEquals
+		assertThat(discoverer1.hashCode()).isEqualTo(discoverer2.hashCode());
+	}
+
+	@Test
+		// GH-2312
+	void genericFieldOfType() {
+
+		Field field = ReflectionUtils.findField(GenericPerson.class, "value");
+		TypeDiscoverer<Object> discoverer = new TypeDiscoverer<>(ResolvableType.forField(field, TypeExtendingGenericPersonWithAddress.class));
+
+		assertThat(discoverer).isEqualTo(ClassTypeInformation.from(Address.class));
+		assertThat(discoverer.hashCode()).isEqualTo(ClassTypeInformation.from(Address.class).hashCode());
+	}
+
 	class Person {
 
 		Addresses addresses;
 		Iterable<Address> addressIterable;
 	}
+
+	class TypeExtendingPerson {
+
+	}
+
+	class OtherPerson {
+		Addresses addresses;
+	}
+
+	class GenericPerson<T> {
+		T value;
+	}
+
+	class TypeExtendingGenericPersonWithObject extends GenericPerson<Object> {
+
+	}
+
+	class TypeExtendingGenericPersonWithAddress extends GenericPerson<Address> {
+
+	}
+
 
 	abstract class Addresses implements Iterable<Address> {
 
